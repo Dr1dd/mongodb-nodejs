@@ -1,21 +1,26 @@
 var MongoClient = require('mongodb').MongoClient;
-var url = "mongodb://192.168.0.106/";
+var url = "mongodb://192.168.0.145/";
 
 var genresObject = [
 	{_id: 1, genre_title: 'Action'},
 	{_id: 2, genre_title: 'Comedy'},
+	{_id: 3, genre_title: 'Drama'},
 ];
 var reviewersObject = [
 	{_id: 1, reviewer_name: 'Peter Jackson'},
 	{_id: 3, reviewer_name: 'John Tomston'},
+	{_id: 5, reviewer_name: 'Jeff Jefferson'},
 ];
 var moviesObject = [
 	{ _id: 1, movie_title: 'Vienas', movie_year: 1999, movie_genres: [{genre_id: 2},{genre_id:1}], rating: [{reviewer_id: 1, rating_stars: 5}, {reviewer_id: 3, rating_stars:4}]},
 	{ _id: 2, movie_title: 'Du', movie_year: 2003, movie_genres: [{genre_id: 1}], rating: [{reviewer_id: 1, rating_stars: 4}, {reviewer_id: 3, rating_stars:5}]},
 	{ _id: 3, movie_title: 'Trys', movie_year: 2005, movie_genres: [{genre_id: 1},{genre_id:2}], rating: [{reviewer_id: 1, rating_stars: 2}, {reviewer_id: 3, rating_stars:3}]},
+	{ _id: 4, movie_title: 'Keturi', movie_year: 2010, movie_genres: [{genre_id: 1},{genre_id:3}], rating: [{reviewer_id: 5, rating_stars: 4}]},
 
 ]; 
-
+var resultArray = [];
+//createCollections();
+//insertData();
 //queryEmbedded();
 //queryAggregation();
 queryMapReduce();
@@ -101,72 +106,52 @@ function queryAggregation(){
 		});
 }
 var map = function(){
-	//var ratingArray = new Array();
-	//var ratingArray;
-	/*for(i in this.rating){
-		if(this.rating[i].reviewer_id == ratingArray[i] = this.rating[i].rating_stars;
-	}*/
+
 	var value = new Array();
-	//for(var i in this.rating){
 		var value = {
 		movie_id: this._id,
 		movie_title: this.movie_title,
 		year: this.movie_year,
-		rating: this.rating,
 		 };
-	//}
-	//if(this.rating.reviewer_id = this.)
-		for(var i in this)
-			for(var j in this.rating)
-		emit({ reviewer_id:this.rating[j].reviewer_id}, value );
-
+		for(var i in this.rating)
+				emit({reviewer_id:this.rating[i].reviewer_id}, {movie_id:this._id, movie_title:this.movie_title, year:this.movie_year, rating: this.rating[i].rating_stars} );
 }
 var mapReviewers = function(){
 
 		emit({reviewer_id:this._id}, {"name" : this.reviewer_name } );
 }
-var reduce = function(k, v) {
-			var result = {  
-			"reviewer_name" : "",
-			"movie_title": "",
-			"year": "",
-			"rating": [],
-		};
+var reduce = function(key, value) {
+			var results = {};
+			var movies = [];
+		
 	
 		//result.reviewer_name
 		
-		 v.forEach(function(v) {
-
-		if(v.movie_title != null ) result.movie_title = v.movie_title;
-		if(v.name != null) result.reviewer_name = v.name;
-		if(v.year != null) result.year = v.year;
-		//if(v.result != null) result.rating = v.result;
-		 
-		 	if(v.rating!=null) result= v.rating;
-		 
+		 value.forEach(function(v) {
+		 	var movie = {};
+		 	if(v.movie_id != undefined ) movie["movie_id"]= v.movie_id;
+			if(v.movie_title !== undefined ) movie["movie_title"]= v.movie_title;
+			if(v.year !== undefined) movie["year"] = v.year;
+			if(v.rating !== undefined) movie["rating_stars"] = v.rating;
+			if(Object.keys(movie).length > 0) movies.push(movie);
+			if(v.name !== undefined) results["reviewer_name"] = v.name;
+			if(v.movies !== undefined) results["movies"] = v.movies;
+			//if(Object.keys(movie).length > 0) results["movies"] = movies;
 		 });
-		 var resultArray = [];
-		 resultArray.push(result);
-		//console.log(result.year);
-		return {value:resultArray};
+
+		if(Object.keys(movies).length > 0) results["movies"] = movies;
+
+
+		return results;
 	}
 function queryMapReduce() {
 	MongoClient.connect(url, function(err, db) {
 		var dbo = db.db("mydb");
 		
-		dbo.collection("reviewers").mapReduce(mapReviewers, reduce, { out: { reduce: "joined"} }, 
-					function (err, result) {
-				if(result) {
-					//console.log(result);
-				}
+		dbo.collection('movies').mapReduce(map,	reduce, { out: { reduce: "joined"} });
+		dbo.collection("reviewers").mapReduce(mapReviewers, reduce, { out: { reduce: "joined"} });
+
 			db.close();
-		}
-			);
-		dbo.collection('movies').mapReduce(
-			map,
-			reduce,
-			{ out: { reduce: "joined"} },
-			
-			);
+
 	});
 }
